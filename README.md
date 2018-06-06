@@ -7,11 +7,12 @@ Borrowed heavily from:
 https://github.com/rocker-org/shiny
 https://github.com/flaviobarros/shiny-wordcloud
 https://medium.com/@suomynonascitylana/getting-started-with-docker-to-do-data-science-and-deploy-a-shiny-app-46803f8a0a69
+https://www.r-bloggers.com/dockerizing-a-shiny-app/
 
 Todos:
-- Categorical variables
+- Categorical variables!
 
-- Bayesian feature selection
+- Bayesian feature selection!
 
-- Model based experimental design
+- Model based experimental design!
 
