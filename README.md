@@ -9,6 +9,8 @@ https://github.com/flaviobarros/shiny-wordcloud
 https://medium.com/@suomynonascitylana/getting-started-with-docker-to-do-data-science-and-deploy-a-shiny-app-46803f8a0a69
 https://www.r-bloggers.com/dockerizing-a-shiny-app/
 
+
+
 Todos:
 - Categorical variables!
 
@@ -16,3 +18,4 @@ Todos:
 
 - Model based experimental design!
 
+Deploy on digital ocean using docker app container and the command: `docker run -d -p 80:80 chepyle/shiny_diydoe &`

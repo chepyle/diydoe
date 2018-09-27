@@ -154,8 +154,6 @@ server <- function(input, output) {
         as.numeric(conditions[i, match(round(doe_expts[, i]), as.numeric(names(conditions)))])
     }
     row.names(doe_expts) <- NULL
-    
-    
     doe_expts
   })
   
@@ -172,7 +170,7 @@ server <- function(input, output) {
         marker = list(color = as.formula(paste0(
           "~", input$var.c
         )),
-        showscale = TRUE)
+        size = 20, opacity = 0.5, showscale = TRUE)
       ) %>%
         add_markers() %>% layout(showlegend = FALSE)
     } else{
@@ -235,7 +233,8 @@ server <- function(input, output) {
         marker = list(color = as.formula(paste0(
           "~", input$var.c
         )),
-        showscale = TRUE)
+        showscale = TRUE,
+        size=10)
       ) %>%
         add_markers() %>% layout(showlegend = FALSE)
     }
@@ -284,10 +283,10 @@ server <- function(input, output) {
           z = as.formula(paste0('~', input$var.y)),
           mode = "markers",
           type = "scatter",
-          opacity = 0.5,
           marker = list(
-            size = 5,
+            size = 10,
             color = "black",
+            opacity=0.66,
             symbol = 104
           )
         ) %>%
