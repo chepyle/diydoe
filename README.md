@@ -26,4 +26,8 @@ How to work it:
 
 1. Build docker image with `docker build -t chepyle/shiny_diydoe .`
 
-2. Deploy on digital ocean using docker app container and the command: `docker run -d -p 80:80 chepyle/shiny_diydoe &`
+2. Push image with `docker push chepyle/shiny_diydoe`
+
+3. Deploy on digital ocean using docker app container and the commands: 
+ -  `docker pull chepyle/shiny_diydoe`
+ -  `docker run -d -p 80:80 chepyle/shiny_diydoe &`
