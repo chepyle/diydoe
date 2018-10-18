@@ -25,21 +25,19 @@ ui <- shinyUI(
           value = 3
         ),
         numericInput('n_y', label = p('Number Responses'), value = 1),
-        sliderInput(
-          "n_expts",
-          "Number of experiments:",
-          min = 6,
-          max = 30,
-          value = 8
-        ),
+        
         sliderInput(
           "n_centers",
           "Number of additional centerpoints:",
           min = 0,
           max = 4,
           value = 4
-        )
         ),
+        radioButtons("model.choice", label = p("Model Responses"),
+                     choices = list("Main Effects" = '~.', "Interactions" = '~.^2', "Quadratic" = '~quad(.)'), 
+                     selected = '~.'
+        ),
+        uiOutput('uiOutpt')),
       mainPanel(
         h4('Factors and Levels:'),
         rHandsontableOutput('table'),
@@ -51,6 +49,7 @@ ui <- shinyUI(
     tabPanel(
       "2. Execute DoE",
       h4('Enter experimental info here:'),
+      p('y columns have been pre-filled with random number placeholders'),
       #dataTableOutput('expts'),
       rHandsontableOutput('rht_expts'),
       h4('OR Upload file with simple table'),
@@ -65,20 +64,37 @@ ui <- shinyUI(
     ),
     tabPanel(
       "4. Analyze DoE",
-      mainPanel(
-        plotlyOutput("ana.plot"),
-        br(),
-        h4('Model Statistics'),
-        verbatimTextOutput("mod.summary"),
-        br(),
-        h4('Predicted Performance'),
-        plotlyOutput("contour.plot")
-      )
-    )
+        mainPanel(
+        uiOutput('select.selection'),
+        uiOutput('analyze.selection'),width = 12)
+    ), id = 'inNavbar'
 )
 )
 # Define server logic required to draw a histogram
 server <- function(input, output) {
+  
+  min_expts <- reactive({
+    if (input$model.choice=='~.'){
+      minx=input$n_x+1+input$n_centers
+    }else if(input$model.choice=='~.^2'){
+      minx=choose(input$n_x,2)+input$n_x+1+input$n_centers
+    }else if(input$model.choice=='~quad(.)'){
+      minx=choose(input$n_x,2)+input$n_x*2+1+input$n_centers
+    }
+
+    minx
+  })
+  
+  output$uiOutpt <- renderUI({
+    sliderInput(
+      "n_expts",
+      "Total number of experiments:",
+      min = min_expts(),
+      max = 30,
+      value = 8
+    )
+        })
+  
   output$color_by <- renderUI({
     names <- names(hot_to_r(input$rht_expts))
     tagList(
@@ -103,17 +119,44 @@ server <- function(input, output) {
     )
   })
   
-  output$distPlot <- renderPlot({
-    # generate bins based on input$bins from ui.R
-    x    <- faithful[, 2]
-    bins <- seq(min(x), max(x), length.out = input$bins + 1)
-    
-    # draw the histogram with the specified number of bins
-    hist(x,
-         breaks = bins,
-         col = 'darkgray',
-         border = 'white')
+  output$select.selection <- renderUI({
+
+    names <- names(hot_to_r(input$rht_expts))
+        selectInput(
+          'var.response',
+          'select response',
+          choices = names[seq(input$n_x+1,length(names))],
+          selected = names[length(names)]
+        )
   })
+  
+  
+  observeEvent(input$var.response,{
+    output$analyze.selection <- renderUI({
+    #expts <- hot_to_r(input$rht_expts)
+    #print(paste0(
+    #  input$var.response,
+    #  '~',paste0(names(expts)[seq(input$n_x)], collapse = '+')))
+    expts <- hot_to_r(input$rht_expts)
+    if (!is.null(input$var.response)){
+      mainPanel(
+        br(),
+        plotlyOutput("ana.plot"),
+        br(),
+        h4('Model Statistics'),
+        verbatimTextOutput("mod.summary"),
+        br(),
+        h4('Predicted Performance'),
+        plotlyOutput("contour.plot"))
+    }
+    })
+  })# observe
+    
+    observeEvent(input$inNavbar,{
+      output$analyze.selection <- renderUI({
+          mainPanel()
+      })
+    })
   
   df <- reactive({
     n <- input$n_x
@@ -131,7 +174,7 @@ server <- function(input, output) {
   )
   
   doe_expts <- reactive({
-    nx <- input$n_expts
+    nx <- input$n_expts-input$n_centers
     table_data <- hot_to_r(input$table)
     
     lvls <- table_data
@@ -142,7 +185,7 @@ server <- function(input, output) {
     ff = gen.factorial(3, nrow(lvls), varNames = lvls$Name)
     
     #print(input$n_expts)
-    des <- optFederov( ~ ., ff, nx)
+    des <- optFederov( as.formula(input$model.choice), ff, nx)
     
     # add centerpoints
     centers = data.frame(matrix(rep(0, input$n_centers * nrow(lvls)), ncol = nrow(lvls)))
@@ -181,18 +224,29 @@ server <- function(input, output) {
   # make model- use lasso for regularization
   mod <- reactive({
     expts <- hot_to_r(input$rht_expts)
-    X <- model.matrix(as.formula(paste0(
-      input$var.y,
-      '~quad(',
-      paste0(names(expts[names(expts) !=
-                           input$var.y]), collapse = ','),
-      ')'
-    )), expts)
-    X <- X[, -1]
+     if (input$model.choice=='~.'){
+      X <- model.matrix(as.formula(paste0(
+        input$var.response,
+        '~',paste0(c('1',names(expts)[seq(input$n_x)]), collapse = '+'))), expts)
+    }else if(input$model.choice=='~.^2'){
+      X <- model.matrix(as.formula(paste0(
+        input$var.response,
+        '~(',paste0(names(expts)[seq(input$n_x)], collapse = '+'),')^2')), expts)
+    }else if(input$model.choice=='~quad(.)'){
+      X <- model.matrix(as.formula(paste0(
+        input$var.response,
+        '~quad(',paste0(names(expts)[seq(input$n_x)], collapse = ','),')')), expts)
+    }
+    
+    
+    #X <- X[, -1]
+    #print(input$n_y)
+    #print(paste0(input$var.response,'~quad(',paste0(names(expts)[seq(input$n_x)], collapse = ','),')'))
+    #print(X)
     lasso.mod <-
       cv.glmnet(
         X,
-        expts[, input$var.y],
+        expts[, input$var.response],
         family = 'gaussian',
         nfolds = input$n_expts,
         grouped = FALSE
@@ -201,12 +255,11 @@ server <- function(input, output) {
     features <-
       dimnames(coef(lasso.mod, s = 'lambda.min'))[[1]][coef(lasso.mod, s = 'lambda.min')@i +
                                                          1]
-    #print(paste0(input$var.y,'~',paste0(features[-1],collapse='+')))
+    final.formula <- paste0(input$var.response,'~',paste0(c('1',features[-1]),collapse='+'))
+    #print(final.formula)
     mod <-
-      lm(as.formula(paste0(
-        input$var.y, '~', paste0(features[-1], collapse = '+')
-      )), data = expts)
-    return(mod)
+      lm(as.formula(final.formula), data = expts)
+    return(list(final.formula,mod))
   })
   
   
@@ -214,18 +267,19 @@ server <- function(input, output) {
     #print(str(mod()))
     m <- mod()
     #print(m)
-    return(print(summary(m)))
+    print(m[[1]])
+    print(summary(m[[2]]))
   })
-  
+
   output$ana.plot <- renderPlotly({
     # renders model parity plotting
     expts <- hot_to_r(input$rht_expts)
-    if (var(expts[input$var.y]) > 0) {
-      model <- mod()
+    if (var(expts[input$var.response]) > 0) {
+      model <- mod()[[2]]
       expts$pred <- model$fitted.values
       plot_ly(
         expts,
-        x = as.formula(paste0("~", input$var.y)),
+        x = as.formula(paste0("~", input$var.response)),
         y = as.formula(paste0("~pred")),
         type = 'scatter',
         mode = 'markers',
@@ -251,12 +305,17 @@ server <- function(input, output) {
     )
     # renders model contours
     expts <- hot_to_r(input$rht_expts)
-    if (var(expts[input$var.y]) > 0) {
-      model <- mod()
-      #print(model)
-      grid <- expand.grid(lapply(expts,
+    if (var(expts[input$var.response]) > 0) {
+      m <- mod()
+      model <- m[[2]]
+      final.formula <- m[[1]]
+      # TODO: figure out a way to extract the relevant factors 
+      #predvars <- unique(c(names(attr(attr(model$model,'terms'),'dataClasses'))[-1],input$var.c,input$var.x))
+      predvars <- names(expts)[1:input$n_x]
+      #print(predvars)
+      grid <- expand.grid(lapply(expts[(predvars)],
                                  function(x) {
-                                   seq(min(x), max(x), length.out = 10)
+                                   seq(min(x,na.rm=T), max(x,na.rm = T), length.out = 10)
                                  }))
       #print(head(grid))
       pts <-
@@ -269,8 +328,7 @@ server <- function(input, output) {
       ku = acast(pts, as.formula(paste0(input$var.x, '~', input$var.c)), max, value.var = 'upr')
       #pts.mat <- acast()
       
-      plot_ly(x = dimnames(k)[[1]], y = dimnames(k)[[2]]) %>% add_surface(z =
-                                                                            k, showscale = FALSE) %>%
+      plot_ly(x = dimnames(k)[[1]], y = dimnames(k)[[2]]) %>% add_surface(z =k, showscale = FALSE) %>%
         add_surface(z = kl,
                     opacity = 0.66,
                     showscale = FALSE) %>% add_surface(z = ku,
@@ -280,7 +338,7 @@ server <- function(input, output) {
           data = expts,
           x = as.formula(paste0('~', input$var.c)),
           y = as.formula(paste0('~', input$var.x)),
-          z = as.formula(paste0('~', input$var.y)),
+          z = as.formula(paste0('~', input$var.response)),
           mode = "markers",
           type = "scatter",
           marker = list(
@@ -311,10 +369,19 @@ server <- function(input, output) {
   output$rht_expts = renderRHandsontable({
     expts <- doe_expts()
     # create dummy data here:
-    y <-
-      rnorm(expts[, 1], sd = 0.1) - expts[, 1] - expts[, 1] * expts[, 2] - 2 *
-      expts[, 1] ^ 2 - expts[, 2] ^ 2
-    rhandsontable(cbind(expts, y),
+    y0 <- list(expts[, 1] ,
+              expts[, 1] - expts[, 1] * expts[, 2] ,
+              expts[, 1] - expts[, 1] * expts[, 2] - 2 *
+      expts[, 1] ^ 2 - expts[, 2] ^ 2)
+    
+    doexy = expts
+    for (i in seq(input$n_y)){
+      y <- rnorm(nrow(expts), sd = 0.1*i) - y0[[i%%3+1]]
+      doexy = cbind(doexy,y)
+      names(doexy)[ncol(doexy)] = paste0('y',i)
+    }
+    #print(doexy)
+    rhandsontable(doexy,
                   selectCallback = TRUE,
                   readOnly = FALSE)
   })
@@ -324,7 +391,7 @@ server <- function(input, output) {
       paste('Design_', Sys.Date(), '.csv', sep = '')
     },
     content = function(file) {
-      write.csv(doe_expts(), file, row.names = FALSE)
+      write.csv(doe_expts( ), file, row.names = FALSE)
     }
   )
 }
